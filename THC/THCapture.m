@@ -8,11 +8,21 @@
 
 #import "THCapture.h"
 #import "CGContextCreator.h"
-//#import "BlazeiceAppDelegate.h"
 
 static NSString* const kFileName=@"output.mov";
 
 @interface THCapture()
+
+@property(nonatomic, strong) AVAssetWriter *videoWriter;
+@property(nonatomic, strong) AVAssetWriterInput *videoWriterInput;
+@property(nonatomic, strong) AVAssetWriterInputPixelBufferAdaptor *avAdaptor;
+//recording state
+@property(nonatomic, assign) BOOL           recording;     //正在录制中
+@property(nonatomic, assign) BOOL           writing;       //正在将帧写入文件
+@property(nonatomic, strong) NSDate         *startedAt;     //录制的开始时间
+@property(nonatomic, strong) NSTimer        *timer;         //按帧率写屏的定时器
+
+
 //配置录制环境
 - (BOOL)setUpWriter;
 //清理录制环境
@@ -24,15 +34,12 @@ static NSString* const kFileName=@"output.mov";
 @end
 
 @implementation THCapture
-@synthesize frameRate=_frameRate;
-@synthesize captureLayer=_captureLayer;
-@synthesize delegate=_delegate;
 
 - (id)init
 {
     self = [super init];
     if (self) {
-        _frameRate=10;//默认帧率为10
+        self.frameRate = 100;//默认帧率为10
     }
     
     return self;
@@ -48,19 +55,19 @@ static NSString* const kFileName=@"output.mov";
 - (bool)startRecording1
 {
     bool result = NO;
-    if (! _recording && _captureLayer)
+    if (!self.recording && self.captureView)
     {
         result = [self setUpWriter];
         if (result)
         {
-            startedAt = [NSDate date];
-            _spaceDate=0;
-            _recording = true;
-            _writing = false;
+            self.startedAt = [NSDate date];
+            self.spaceDate=0;
+            self.recording = true;
+            self.writing = false;
             //绘屏的定时器
             NSDate *nowDate = [NSDate date];
-            timer = [[NSTimer alloc] initWithFireDate:nowDate interval:1.0/_frameRate target:self selector:@selector(drawFrame) userInfo:nil repeats:YES];
-            [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
+            self.timer = [[NSTimer alloc] initWithFireDate:nowDate interval:1.0/self.frameRate target:self selector:@selector(drawFrame) userInfo:nil repeats:YES];
+            [[NSRunLoop currentRunLoop] addTimer:self.timer forMode:NSRunLoopCommonModes];
         }
     }
 	return result;
@@ -69,80 +76,112 @@ static NSString* const kFileName=@"output.mov";
 - (void)stopRecording
 {
     if (_recording) {
-         _recording = false;
-        [timer invalidate];
-        timer = nil;
+         self.recording = false;
+        [self.timer invalidate];
+        _timer = nil;
         [self completeRecordingSession];
         [self cleanupWriter];
     }
 }
 - (void)drawFrame
 {
-    /*if ([BlazeiceAppDelegate sharedAppDelegate].isPausing) {
-         _spaceDate=_spaceDate+1.0/35;
-        return;
-    }*/
-    if (!_writing) {
-        [self performSelectorInBackground:@selector(getFrame) withObject:nil];
+    if (!self.writing) {
+        [self performSelectorOnMainThread:@selector(getFrame) withObject:nil waitUntilDone:YES];
     }
 }
--(void) writeVideoFrameAtTime:(CMTime)time addImage:(CGImageRef )newImage
+- (void)writeVideoFrameAtTime:(CMTime)time addImage:(UIImage *)image
 {
-    if (![videoWriterInput isReadyForMoreMediaData]) {
-		NSLog(@"Not ready for video data");
+    if (![self.videoWriterInput isReadyForMoreMediaData]) {
+#ifdef DEBUG
+        NSLog(@"[KSScreenCapture] %s:%d Not ready for video data.", __PRETTY_FUNCTION__, __LINE__);
+#endif
+        NSError *error = [[NSError alloc] initWithDomain:@"com.KSScreenCapture.error" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"Not ready for video data"}];
+        if ([self.delegate respondsToSelector:@selector(recordingFailed:)]) {
+            [self.delegate recordingFailed:error];
+        }
+
 	}
 	else {
 		@synchronized (self) {
-			CVPixelBufferRef pixelBuffer = NULL;
-			CGImageRef cgImage = CGImageCreateCopy(newImage);
-			CFDataRef image = CGDataProviderCopyData(CGImageGetDataProvider(cgImage));
-			
-			int status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, avAdaptor.pixelBufferPool, &pixelBuffer);
-			if(status != 0){
-				//could not get a buffer from the pool
-				NSLog(@"Error creating pixel buffer:  status=%d", status);
-			}
-			// set image data into pixel buffer
-			CVPixelBufferLockBaseAddress( pixelBuffer, 0 );
-			uint8_t* destPixels = CVPixelBufferGetBaseAddress(pixelBuffer);
-			CFDataGetBytes(image, CFRangeMake(0, CFDataGetLength(image)), destPixels);  //XXX:  will work if the pixel buffer is contiguous and has the same bytesPerRow as the input data
-			
-			if(status == 0){
-				BOOL success = [avAdaptor appendPixelBuffer:pixelBuffer withPresentationTime:time];
-				if (!success)
-					NSLog(@"Warning:  Unable to write buffer to video");
-			}
-			
-			//clean up
-			CVPixelBufferUnlockBaseAddress( pixelBuffer, 0 );
-			CVPixelBufferRelease( pixelBuffer );
-			CFRelease(image);
-			CGImageRelease(cgImage);
+            CGContextRef context = UIGraphicsGetCurrentContext();
+
+            CVPixelBufferRef pixelBuffer = [self pixelBufferForImage:image];
+            BOOL success = [self.avAdaptor appendPixelBuffer:pixelBuffer withPresentationTime:time];
+            if (!success) {
+#ifdef DEBUG
+                NSLog(@"[KSScreenCapture] %s:%d Warning:  Unable to write buffer to video.", __PRETTY_FUNCTION__, __LINE__);
+#endif
+            }
+            if (pixelBuffer) {
+                CVPixelBufferRelease(pixelBuffer);
+            }
 		}
 	}
 }
+
+
+- (CVPixelBufferRef)pixelBufferForImage:(UIImage *)image
+{
+    CGImageRef cgImage = image.CGImage;
+    
+    NSDictionary *options = @{
+                              (NSString *)kCVPixelBufferCGImageCompatibilityKey: @(YES),
+                              (NSString *)kCVPixelBufferCGBitmapContextCompatibilityKey: @(YES)
+                              };
+    CVPixelBufferRef buffer = NULL;
+    
+    CVPixelBufferCreate(kCFAllocatorDefault, CGImageGetWidth(cgImage), CGImageGetHeight(cgImage), kCVPixelFormatType_32ARGB, (__bridge CFDictionaryRef)options, &buffer);
+    
+    CVPixelBufferLockBaseAddress(buffer, 0);
+    
+    void *data                  = CVPixelBufferGetBaseAddress(buffer);
+    CGColorSpaceRef colorSpace  = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context        = CGBitmapContextCreate(data, CGImageGetWidth(cgImage), CGImageGetHeight(cgImage), 8, CVPixelBufferGetBytesPerRow(buffer), colorSpace, (kCGBitmapAlphaInfoMask & kCGImageAlphaNoneSkipFirst));
+    CGContextDrawImage(context, CGRectMake(0.0f, 0.0f, CGImageGetWidth(cgImage), CGImageGetHeight(cgImage)), cgImage);
+    
+    CGColorSpaceRelease(colorSpace);
+    CGContextRelease(context);
+    
+    CVPixelBufferUnlockBaseAddress(buffer, 0);
+    
+    return buffer;
+}
+
+
+
 - (void)getFrame
 {
-    if (!_writing) {
-        _writing = true;
-        size_t width  = CGBitmapContextGetWidth(context);
-        size_t height = CGBitmapContextGetHeight(context);
+    if (!self.writing) {
+        self.writing = true;
+        size_t width  = self.captureView.frame.size.width;
+        size_t height = self.captureView.frame.size.height;
         @try {
-            CGContextClearRect(context, CGRectMake(0, 0,width , height));
-            [self.captureLayer renderInContext:context];
-            self.captureLayer.contents=nil;
-            CGImageRef cgImage = CGBitmapContextCreateImage(context);
-            if (_recording) {
-                float millisElapsed = [[NSDate date] timeIntervalSinceDate:startedAt] * 1000.0-_spaceDate*1000.0;
-                //NSLog(@"millisElapsed = %f",millisElapsed);
-                [self writeVideoFrameAtTime:CMTimeMake((int)millisElapsed, 1000) addImage:cgImage];
-            }
-            CGImageRelease(cgImage);
-        }
-        @catch (NSException *exception) {
+            CGSize size = CGSizeMake(width, height);
             
+            UIGraphicsBeginImageContextWithOptions(size, NO, [UIScreen mainScreen].scale);
+
+            [self.captureView drawViewHierarchyInRect:CGRectMake(0, 0, width, height) afterScreenUpdates:NO];
+            UIImage *resultImage = UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+
+            if (self.recording) {
+                float millisElapsed = [[NSDate date] timeIntervalSinceDate:self.startedAt] * 1000.0-self.spaceDate*1000.0;
+#ifdef DEBUG
+                NSLog(@"[KSScreenCapture] %s:%d millisElapsed = %f", __PRETTY_FUNCTION__, __LINE__, millisElapsed);
+#endif
+                [self writeVideoFrameAtTime:CMTimeMake((int)millisElapsed, 1000) addImage:resultImage];
+            }
         }
-        _writing = false;
+        @catch (NSError *error) {
+#ifdef DEBUG
+            NSLog(@"[KSScreenCapture] %s:%d error = %@", __PRETTY_FUNCTION__, __LINE__, error.localizedDescription);
+#endif
+            if ([self.delegate respondsToSelector:@selector(recordingFailed:)]) {
+                [self.delegate recordingFailed:error];
+            }
+
+        }
+        self.writing = false;
     }
 }
 
@@ -152,20 +191,21 @@ static NSString* const kFileName=@"output.mov";
 	
 	return filePath;
 }
--(BOOL) setUpWriter {
+
+- (BOOL)setUpWriter {
     
-    CGSize size = self.captureLayer.frame.size;
+    CGSize size = self.captureView.layer.frame.size;
     CGSize translate = CGSizeMake(0, size.height);//The translate size for flip the context.
     //Context size must be times of 32
     if (fmodf(size.width, 32) > 0) {
         int quotient = size.width/32;
         size.width = (quotient+1)*32;
-        translate.width += (size.width-self.captureLayer.frame.size.width)/2;
+        translate.width += (size.width-self.captureView.layer.frame.size.width)/2;
     }
     if (fmodf(size.height, 32) > 0) {
         int quotient = size.height/32;
         size.height = (quotient+1)*32;
-        translate.height -= (size.height-self.captureLayer.frame.size.height)/2;
+        translate.height -= (size.height-self.captureView.layer.frame.size.height)/2;
     }
     //Clear Old TempFile
 	NSError  *error = nil;
@@ -175,15 +215,20 @@ static NSString* const kFileName=@"output.mov";
     {
 		if ([fileManager removeItemAtPath:filePath error:&error] == NO)
         {
-			NSLog(@"Could not delete old recording file at path:  %@", filePath);
+#ifdef DEBUG
+            NSLog(@"[KSScreenCapture] %s:%d Could not delete old recording file at path %@. Error %@.", __PRETTY_FUNCTION__, __LINE__, filePath, error.localizedDescription);
+#endif
+            if ([self.delegate respondsToSelector:@selector(recordingFailed:)]) {
+                [self.delegate recordingFailed:error];
+            }
             return NO;
 		}
 	}
     
     //Configure videoWriter
     NSURL   *fileUrl=[NSURL fileURLWithPath:filePath];
-	videoWriter = [[AVAssetWriter alloc] initWithURL:fileUrl fileType:AVFileTypeQuickTimeMovie error:&error];
-	NSParameterAssert(videoWriter);
+	_videoWriter = [[AVAssetWriter alloc] initWithURL:fileUrl fileType:AVFileTypeQuickTimeMovie error:&error];
+	NSParameterAssert(self.videoWriter);
 	
 	//Configure videoWriterInput
 	NSDictionary* videoCompressionProps = [NSDictionary dictionaryWithObjectsAndKeys:
@@ -197,93 +242,60 @@ static NSString* const kFileName=@"output.mov";
 								   videoCompressionProps, AVVideoCompressionPropertiesKey,
 								   nil];
 
-	videoWriterInput = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:videoSettings];
+	_videoWriterInput = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:videoSettings];
 	
-	NSParameterAssert(videoWriterInput);
-	videoWriterInput.expectsMediaDataInRealTime = YES;
+	NSParameterAssert(self.videoWriterInput);
+	self.videoWriterInput.expectsMediaDataInRealTime = YES;
 	NSDictionary* bufferAttributes = [NSDictionary dictionaryWithObjectsAndKeys:
 									  [NSNumber numberWithInt:kCVPixelFormatType_32ARGB], kCVPixelBufferPixelFormatTypeKey, nil];
 	
-	avAdaptor = [AVAssetWriterInputPixelBufferAdaptor assetWriterInputPixelBufferAdaptorWithAssetWriterInput:videoWriterInput sourcePixelBufferAttributes:bufferAttributes];
+	_avAdaptor = [AVAssetWriterInputPixelBufferAdaptor assetWriterInputPixelBufferAdaptorWithAssetWriterInput:self.videoWriterInput sourcePixelBufferAttributes:bufferAttributes];
 	
 	//add input
-	[videoWriter addInput:videoWriterInput];
-	[videoWriter startWriting];
-	[videoWriter startSessionAtSourceTime:CMTimeMake(0, 1000)];
+	[self.videoWriter addInput:self.videoWriterInput];
+	[self.videoWriter startWriting];
+	[self.videoWriter startSessionAtSourceTime:CMTimeMake(0, 1000)];
     
     
-    //create context
-    if (context== NULL)
-    {
-        CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-        context = CGBitmapContextCreate (NULL,
-                                         size.width,
-                                         size.height,
-                                         8,//bits per component
-                                         size.width * 4,
-                                         colorSpace,
-                                         kCGImageAlphaNoneSkipFirst);
-        CGColorSpaceRelease(colorSpace);
-        CGContextSetAllowsAntialiasing(context,NO);
-        CGAffineTransform flipVertical = CGAffineTransformMake(1, 0, 0,-1, translate.width, translate.height);
-        CGContextConcatCTM(context, flipVertical);
-    }
-    if (context== NULL)
-    {
-		fprintf (stderr, "Context not created!");
-        return NO;
-	}
-	
 	return YES;
 }
 
-- (void) cleanupWriter {
+- (void)cleanupWriter {
    
-	avAdaptor = nil;
+	_avAdaptor = nil;
 	
-	videoWriterInput = nil;
+	_videoWriterInput = nil;
 	
-	videoWriter = nil;
+	_videoWriter = nil;
 	
-	startedAt = nil;
-    
-
-    //CGContextRelease(context);
-    //context=NULL;
+	_startedAt = nil;
 }
 
-- (void) completeRecordingSession {
+- (void)completeRecordingSession {
      
 	
-	[videoWriterInput markAsFinished];
+	[self.videoWriterInput markAsFinished];
 	
 	// Wait for the video
-	int status = videoWriter.status;
+	int status = self.videoWriter.status;
 	while (status == AVAssetWriterStatusUnknown)
     {
-		NSLog(@"Waiting...");
-		[NSThread sleepForTimeInterval:0.5f];
-		status = videoWriter.status;
+#ifdef DEBUG
+        NSLog(@"[KSScreenCapture] %s:%d Waiting...", __PRETTY_FUNCTION__, __LINE__);
+#endif
+        [NSThread sleepForTimeInterval:0.5f];
+		status = self.videoWriter.status;
 	}
 	
-    [videoWriter finishWritingWithCompletionHandler:^{
-        if ([_delegate respondsToSelector:@selector(recordingFinished:)]) {
-            [_delegate recordingFinished:[self tempFilePath]];
+    [self.videoWriter finishWritingWithCompletionHandler:^{
+        if ([self.delegate respondsToSelector:@selector(recordingFinished:)]) {
+            [self.delegate recordingFinished:[self tempFilePath]];
         }
+        
+        UISaveVideoAtPathToSavedPhotosAlbum([self tempFilePath], nil, nil, nil);
     }];
-    
-//    BOOL success = [videoWriter finishWriting];
-//    if (!success)
-//    {
-//        NSLog(@"finishWriting returned NO");
-//        if ([_delegate respondsToSelector:@selector(recordingFaild:)]) {
-//            [_delegate recordingFaild:nil];
-//        }
-//        return ;
-//    }
     
     
 }
-
 
 @end
