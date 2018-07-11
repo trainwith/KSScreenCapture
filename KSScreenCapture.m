@@ -11,18 +11,15 @@
 #import <Photos/PHPhotoLibrary.h>
 
 @interface KSScreenCapture () <THCaptureDelegate, KSAudioCaptureDelegate>
-
+@property (nonatomic, strong) THCapture *capture;
+@property (nonatomic, strong) NSString *videoPath;
+@property (nonatomic, strong) NSString *audioPath;
+@property (nonatomic, weak) UIViewController *target;
 @end
 
 static NSString *animationKey = @"KSHighlightAnimation";
 
-@implementation KSScreenCapture {
-    THCapture *_capture;
-//    KSAudioCapture *_audioCapture;
-    NSString *_videoPath;
-    NSString *_audioPath;
-    __weak __kindof UIViewController *_target;
-}
+@implementation KSScreenCapture
 
 #pragma mark - Initialize methods
 
@@ -30,35 +27,31 @@ static NSString *animationKey = @"KSHighlightAnimation";
     if (!self) {
         self = [super init];
     }
-    _highlighted = YES;
-    _target = target;
-    if (!_capture) {
-        _capture = [[THCapture alloc] init];
-        _capture.delegate = self;
+    self.highlighted = YES;
+    self.target = target;
+    if (!self.capture) {
+        self.capture = [[THCapture alloc] init];
+        self.capture.delegate = self;
     }
-    _muted = NO;
+    self.muted = NO;
     return self;
 }
 
 - (id)initWithTarget:(__kindof UIViewController *)target CaptureLayer:(CALayer *)layer {
     self = [self initWithTarget:target];
-    _capture.captureLayer = layer;
+    self.capture.captureView = target.view;
     return self;
 }
 
 - (void)configAudioCapture {
-    _audioCapture = [[KSAudioCapture alloc] initWithFileName:nil target:_target setting:nil];
-    _audioCapture.delegate = self;
+    self.audioCapture = [[KSAudioCapture alloc] initWithFileName:nil target:_target setting:nil];
+    self.audioCapture.delegate = self;
 }
 
 #pragma mark - Global config methods
 
-- (void)setCaptureLayer:(CALayer *)layer {
-    _capture.captureLayer = layer;
-}
-
 - (void)setFrameRate:(NSUInteger)rate {
-    _capture.frameRate = rate;
+    self.capture.frameRate = rate;
 }
 
 #pragma mark - Capture methods
@@ -96,17 +89,17 @@ static NSString *animationKey = @"KSHighlightAnimation";
 }
 
 - (void)stopRecord {
-    [_capture stopRecording];
-    [_capture.captureLayer removeAnimationForKey:animationKey];
-    if (_audioCapture) {
-        [_audioCapture stopRecord];
+    [self.capture stopRecording];
+    [self.capture.captureView.layer removeAnimationForKey:animationKey];
+    if (self.audioCapture) {
+        [self.audioCapture stopRecord];
     }
 }
 
 - (void)highlightRecordView {
     // Set the record view layer highlight animation
-    [_capture.captureLayer setBorderWidth:3.0];
-    [_capture.captureLayer setBorderColor:[UIColor clearColor].CGColor];
+    [self.capture.captureView.layer setBorderWidth:3.0];
+    [self.capture.captureView.layer setBorderColor:[UIColor clearColor].CGColor];
     CABasicAnimation *colorAnimation = [CABasicAnimation animationWithKeyPath:@"borderColor"];
     colorAnimation.fromValue = (id)[UIColor clearColor].CGColor;
     colorAnimation.toValue = (id)[UIColor redColor].CGColor;
@@ -114,7 +107,7 @@ static NSString *animationKey = @"KSHighlightAnimation";
     colorAnimation.autoreverses = YES;
     colorAnimation.repeatCount = HUGE_VALF;
     colorAnimation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
-    [_capture.captureLayer addAnimation:colorAnimation forKey:animationKey];
+    [self.capture.captureView.layer addAnimation:colorAnimation forKey:animationKey];
 }
 
 #pragma mark - File methods
