@@ -167,7 +167,7 @@ static NSString* const kFileName=@"output.mov";
             if (self.recording) {
                 float millisElapsed = [[NSDate date] timeIntervalSinceDate:self.startedAt] * 1000.0-self.spaceDate*1000.0;
 #ifdef DEBUG
-                NSLog(@"[KSScreenCapture] %s:%d millisElapsed = %f", __PRETTY_FUNCTION__, __LINE__, millisElapsed);
+                NSLog(@"[KSScreenCapture] %s:%d seconds = %d", __PRETTY_FUNCTION__, __LINE__, (int)millisElapsed/1000);
 #endif
                 [self writeVideoFrameAtTime:CMTimeMake((int)millisElapsed, 1000) addImage:resultImage];
             }
@@ -292,7 +292,9 @@ static NSString* const kFileName=@"output.mov";
             [self.delegate recordingFinished:[self tempFilePath]];
         }
         
+#ifdef DEBUG
         UISaveVideoAtPathToSavedPhotosAlbum([self tempFilePath], nil, nil, nil);
+#endif
     }];
     
     
