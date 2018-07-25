@@ -13,7 +13,7 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-+ (void)mergeVideo:(NSString *)videoPath andAudio:(NSString *)audioPath andTarget:(id)target andAction:(SEL)action
++ (BOOL)mergeVideo:(NSString *)videoPath andAudio:(NSString *)audioPath andTarget:(id)target andAction:(SEL)action
 {
     NSURL *audioUrl=[NSURL fileURLWithPath:audioPath];
 	NSURL *videoUrl=[NSURL fileURLWithPath:videoPath];
@@ -25,10 +25,32 @@
 	AVMutableComposition* mixComposition = [AVMutableComposition composition];
 	AVMutableCompositionTrack *compositionCommentaryTrack = [mixComposition addMutableTrackWithMediaType:AVMediaTypeAudio 
 																						preferredTrackID:kCMPersistentTrackID_Invalid];
-	[compositionCommentaryTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, audioAsset.duration) 
-										ofTrack:[[audioAsset tracksWithMediaType:AVMediaTypeAudio] objectAtIndex:0] 
-										 atTime:kCMTimeZero error:nil];
-	
+
+    NSArray *audioTracks = [audioAsset tracksWithMediaType:AVMediaTypeAudio];
+    if (audioTracks.count == 0) {
+        if ([target respondsToSelector:action])
+        {
+            NSError *error = [[NSError alloc] initWithDomain:@"com.KSScreenCapture.error" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"Cannot access audio tracks"}];
+            [target performSelector:action withObject:nil withObject:error];
+        }
+        return NO;
+    }
+    AVAssetTrack *audioTrack = [audioTracks firstObject];
+    if (audioTracks == nil) {
+        NSError *error = [[NSError alloc] initWithDomain:@"com.KSScreenCapture.error" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"First audio track does not exist"}];
+        return NO;
+    }
+    NSError *error = nil;
+	[compositionCommentaryTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, audioAsset.duration)
+										ofTrack:audioTrack atTime:kCMTimeZero error:&error];
+    if (error != nil) {
+        // your completion code here
+        if ([target respondsToSelector:action])
+        {
+            [target performSelector:action withObject:nil withObject:error];
+        }
+    }
+
 	
 	//混合视频
 	AVMutableCompositionTrack *compositionVideoTrack = [mixComposition addMutableTrackWithMediaType:AVMediaTypeVideo 
@@ -47,9 +69,17 @@
 	NSString *exportPath = [[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0] stringByAppendingPathComponent:videoName];
 	NSURL    *exportUrl = [NSURL fileURLWithPath:exportPath];
 	
-	if ([[NSFileManager defaultManager] fileExistsAtPath:exportPath]) 
+	if ([[NSFileManager defaultManager] fileExistsAtPath:exportPath])
 	{
-		[[NSFileManager defaultManager] removeItemAtPath:exportPath error:nil];
+        NSError *error = nil;
+		[[NSFileManager defaultManager] removeItemAtPath:exportPath error:&error];
+        if (error != nil) {
+            // your completion code here
+            if ([target respondsToSelector:action])
+            {
+                [target performSelector:action withObject:nil withObject:error];
+            }
+        }
 	}
 	
 	_assetExport.outputFileType = @"com.apple.quicktime-movie";
@@ -67,6 +97,7 @@
      }];
     
 	//[_assetExport release];
+    return YES;
 }
 #pragma clang diagnostic pop 
 

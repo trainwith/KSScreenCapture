@@ -120,7 +120,12 @@ static NSString *animationKey = @"KSHighlightAnimation";
         _audioPath = audioPath;
     }
     if (_videoPath && _audioPath) {
-        [THCaptureUtilities mergeVideo:_videoPath andAudio:_audioPath andTarget:self andAction:@selector(mergeDidFinish:WithError:)];
+        if ([THCaptureUtilities mergeVideo:_videoPath andAudio:_audioPath andTarget:self andAction:@selector(mergeDidFinish:WithError:)]) {
+            DDLogInfo(@"Merge OK");
+        }
+        else {
+            DDLogInfo(@"Merge ERROR");
+        }
     }
 }
 
@@ -134,10 +139,17 @@ static NSString *animationKey = @"KSHighlightAnimation";
 		if ([[NSFileManager defaultManager] fileExistsAtPath:_audioPath]) {
 			[[NSFileManager defaultManager] removeItemAtPath:_audioPath error:nil];
 		}
+        [self exportVideo:outputPath];
+
 	} else {
 		DDLogError(@"Merge Error: ", error.localizedDescription);
+        if ([_delegate respondsToSelector:@selector(KSScreenCaptureDidFinish:path:thumb:error:)]) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [_delegate KSScreenCaptureDidFinish:self path:nil thumb:nil error:error];
+            });
+        }
+
 	}
-	[self exportVideo:outputPath];
 }
 
 - (void)exportVideo:(NSString *)path {
@@ -151,9 +163,9 @@ static NSString *animationKey = @"KSHighlightAnimation";
 	UIImage *thumb = [[UIImage alloc] initWithCGImage:image];
 	CGImageRelease(image);
 	
-    if ([_delegate respondsToSelector:@selector(KSScreenCaptureDidFinish:path:thumb:)]) {
+    if ([_delegate respondsToSelector:@selector(KSScreenCaptureDidFinish:path:thumb:error:)]) {
         dispatch_async(dispatch_get_main_queue(), ^{
-			[_delegate KSScreenCaptureDidFinish:self path:path thumb:thumb];
+            [_delegate KSScreenCaptureDidFinish:self path:path thumb:thumb error:nil];
         });
     }
 }
