@@ -143,9 +143,9 @@ static NSString *animationKey = @"KSHighlightAnimation";
 
 	} else {
 		DDLogError(@"Merge Error: ", error.localizedDescription);
-        if ([_delegate respondsToSelector:@selector(KSScreenCaptureDidFinish:path:thumb:error:)]) {
+        if ([_delegate respondsToSelector:@selector(captureDidFinish:path:thumb:error:)]) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                [_delegate KSScreenCaptureDidFinish:self path:nil thumb:nil error:error];
+                [_delegate captureDidFinish:self path:nil thumb:nil error:error];
             });
         }
 
@@ -163,9 +163,9 @@ static NSString *animationKey = @"KSHighlightAnimation";
 	UIImage *thumb = [[UIImage alloc] initWithCGImage:image];
 	CGImageRelease(image);
 	
-    if ([_delegate respondsToSelector:@selector(KSScreenCaptureDidFinish:path:thumb:error:)]) {
+    if ([_delegate respondsToSelector:@selector(captureDidFinish:path:thumb:error:)]) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            [_delegate KSScreenCaptureDidFinish:self path:path thumb:thumb error:nil];
+            [_delegate captureDidFinish:self path:path thumb:thumb error:nil];
         });
     }
 }
@@ -228,6 +228,10 @@ static NSString *animationKey = @"KSHighlightAnimation";
 - (void)KSAudioCaptureDidFinishWithURL:(NSURL *)url successfully:(BOOL)flag {
     DDLogInfo(@"Audio record finished: %@.", url);
     [self mergeVideo:nil audio:[url absoluteString]];
+}
+
+- (UIImage *)captureImageFromDelegate {
+    return [self.delegate captureImageFromDelegate];
 }
 
 @end

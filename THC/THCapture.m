@@ -151,26 +151,28 @@ static NSString* const kFileName=@"output.mov";
 
 - (void)getFrame
 {
-    if (!self.writing) {
+    if (!self.writing && self.recording) {
         self.writing = true;
         size_t width  = self.captureView.frame.size.width;
         size_t height = self.captureView.frame.size.height;
         @try {
             CGSize size = CGSizeMake(width, height);
-            
-            UIGraphicsBeginImageContextWithOptions(size, NO, [UIScreen mainScreen].scale);
-
-            [self.captureView drawViewHierarchyInRect:CGRectMake(0, 0, width, height) afterScreenUpdates:NO];
-            UIImage *resultImage = UIGraphicsGetImageFromCurrentImageContext();
-            UIGraphicsEndImageContext();
-
-            if (self.recording) {
-                float millisElapsed = [[NSDate date] timeIntervalSinceDate:self.startedAt] * 1000.0-self.spaceDate*1000.0;
-#ifdef DEBUG
-                NSLog(@"[KSScreenCapture] %s:%d seconds = %d", __PRETTY_FUNCTION__, __LINE__, (int)millisElapsed/1000);
-#endif
-                [self writeVideoFrameAtTime:CMTimeMake((int)millisElapsed, 1000) addImage:resultImage];
+            UIImage *resultImage = nil;
+            if ([self.delegate respondsToSelector:@selector(captureImageFromDelegate)]) {
+                resultImage = [self.delegate captureImageFromDelegate];
             }
+            if (resultImage == nil) {
+                UIGraphicsBeginImageContextWithOptions(size, YES, [UIScreen mainScreen].scale);
+                [self.captureView drawViewHierarchyInRect:CGRectMake(0, 0, width, height) afterScreenUpdates:NO];
+                resultImage = UIGraphicsGetImageFromCurrentImageContext();
+                UIGraphicsEndImageContext();
+            }
+            float millisElapsed = [[NSDate date] timeIntervalSinceDate:self.startedAt] * 1000.0-self.spaceDate*1000.0;
+#ifdef DEBUG
+            NSLog(@"[KSScreenCapture] %s:%d seconds = %d", __PRETTY_FUNCTION__, __LINE__, (int)millisElapsed/1000);
+#endif
+
+            [self writeVideoFrameAtTime:CMTimeMake((int)millisElapsed, 1000) addImage:resultImage];
         }
         @catch (NSError *error) {
 #ifdef DEBUG
@@ -290,11 +292,7 @@ static NSString* const kFileName=@"output.mov";
     [self.videoWriter finishWritingWithCompletionHandler:^{
         if ([self.delegate respondsToSelector:@selector(recordingFinished:)]) {
             [self.delegate recordingFinished:[self tempFilePath]];
-        }
-        
-#ifdef DEBUG
-        UISaveVideoAtPathToSavedPhotosAlbum([self tempFilePath], nil, nil, nil);
-#endif
+        }        
     }];
     
     

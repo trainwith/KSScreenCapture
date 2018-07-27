@@ -46,7 +46,7 @@ Support up to iOS 9.
 3.  Declare your view controller implement the KSScreenCaptureDelegate method, and hit the delegate method when capture is done. You can handle the video source file from the videoPath in the block by youself:
 
   ``` objc
-  - (void)KSScreenCaptureDidFinish:(KSScreenCapture *)capture path:(NSString *)videoPath {
+  - (void)captureDidFinish:(KSScreenCapture *)capture path:(NSString *)videoPath {
     // Handle the video source from videoPath
     
     }
