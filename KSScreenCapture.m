@@ -230,8 +230,8 @@ static NSString *animationKey = @"KSHighlightAnimation";
     [self mergeVideo:nil audio:[url absoluteString]];
 }
 
-- (UIImage *)imageToMerge {
-    return [self.delegate imageToMerge];
+- (UIImage *)captureImageFromDelegate {
+    return [self.delegate captureImageFromDelegate];
 }
 
 @end

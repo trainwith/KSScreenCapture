@@ -18,7 +18,7 @@
 
 @protocol KSScreenCaptureDelegate <NSObject>
 - (void)captureDidFinish:(KSScreenCapture * _Nonnull)capture path:(NSString * _Nonnull)videoPath thumb:(UIImage *)thumb error:(NSError *)error;
-- (UIImage *)imageToMerge;
+- (UIImage *)captureImageFromDelegate;
 @end
 
 @interface KSScreenCapture : NSObject
