@@ -158,9 +158,14 @@ static NSString* const kFileName=@"output.mov";
         @try {
             CGSize size = CGSizeMake(width, height);
             
-            UIGraphicsBeginImageContextWithOptions(size, NO, [UIScreen mainScreen].scale);
-
+            UIGraphicsBeginImageContextWithOptions(size, YES, [UIScreen mainScreen].scale);
             [self.captureView drawViewHierarchyInRect:CGRectMake(0, 0, width, height) afterScreenUpdates:NO];
+            if ([self.delegate respondsToSelector:@selector(imageToMerge)]) {
+                UIImage *image2 = [self.delegate imageToMerge];
+                if (image2 != nil) {
+                    [image2 drawInRect:CGRectMake(0,0,size.width,size.height) blendMode:kCGBlendModeNormal alpha:1.0];
+                }
+            }
             UIImage *resultImage = UIGraphicsGetImageFromCurrentImageContext();
             UIGraphicsEndImageContext();
 
@@ -169,6 +174,7 @@ static NSString* const kFileName=@"output.mov";
 #ifdef DEBUG
                 NSLog(@"[KSScreenCapture] %s:%d seconds = %d", __PRETTY_FUNCTION__, __LINE__, (int)millisElapsed/1000);
 #endif
+
                 [self writeVideoFrameAtTime:CMTimeMake((int)millisElapsed, 1000) addImage:resultImage];
             }
         }

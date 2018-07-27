@@ -91,8 +91,10 @@
             // Initialize the audio recorder.
             if (!_recorder) {
                 // Setup session
-                _session = [AVAudioSession sharedInstance];
-                [_session setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
+                if (_allowChangeAudioSession) {
+                    _session = [AVAudioSession sharedInstance];
+                    [_session setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
+                }
                 NSError *error;
                 _recorder = [[AVAudioRecorder alloc] initWithURL:_fileURL settings:_setting error:&error];
                 if (error) {
@@ -108,7 +110,12 @@
                 [_recorder prepareToRecord];
             }
             // Start recordding.
-            if ([_session setActive:YES error:nil] && [_recorder record] && success) {
+            BOOL activate = YES;
+            if (_allowChangeAudioSession) {
+                activate = [_session setActive:YES error:nil];
+            }
+            
+            if (activate && [_recorder record] && success) {
                 success();
             } else if (fail) {
                 fail();
@@ -145,7 +152,9 @@
 
 - (void)stopRecord {
     [_recorder stop];
-    [_session setActive:NO error:nil];
+    if (_allowChangeAudioSession) {
+        [_session setActive:NO error:nil];
+    }
 }
 
 - (BOOL)isRecording {

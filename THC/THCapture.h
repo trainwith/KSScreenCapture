@@ -28,5 +28,6 @@
 
 - (void)recordingFinished:(NSString*)outputPath;
 - (void)recordingFailed:(NSError *)error;
+- (UIImage *)imageToMerge;
 
 @end
