@@ -7,7 +7,6 @@
 //
 
 #import "THCapture.h"
-#import <CocoaLumberjack/CocoaLumberjack.h>
 #import "KSAudioCapture.h"
 
 #ifndef ddLogLevel
@@ -37,7 +36,7 @@
 - (id _Nonnull)initWithTarget:(__kindof UIViewController * _Nonnull)target CaptureLayer:(CALayer * _Nonnull)layer;
 - (void)setCaptureLayer:(CALayer * _Nonnull)layer;
 - (void)setFrameRate:(NSUInteger)rate;
-- (void)startRecordSuccess:(void (^ _Nullable)(void))success fail:(void (^ _Nullable)(void))fail;
+- (void)startRecordSuccess:(void (^ _Nullable)(void))success fail:(void (^ _Nullable)(NSError *error))fail;
 - (void)stopRecord;
 // A simple function to save the video in the phots album
 // with permission checking. If you need to do complicate

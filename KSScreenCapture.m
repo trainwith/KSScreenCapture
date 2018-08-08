@@ -56,7 +56,7 @@ static NSString *animationKey = @"KSHighlightAnimation";
 
 #pragma mark - Capture methods
 
-- (void)startRecordSuccess:(void (^)(void))success fail:(void (^)(void))fail {
+- (void)startRecordSuccess:(void (^)(void))success fail:(void (^)(NSError *error))fail {
     // Initialize the audio capture.
     if (!_muted && !_audioCapture) {
         [self configAudioCapture];
@@ -71,16 +71,18 @@ static NSString *animationKey = @"KSHighlightAnimation";
                 [self highlightRecordView];
             }
         } else if (fail) {
-            fail();
+            fail([[NSError alloc] initWithDomain:@"KSScreenCorder" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"Failed in start recording inside Screen Capture"}]);
         }
     };
     if (_audioCapture) {
         [_audioCapture startRecordSuccess:^{
             recordBlock();
-        } fail:^{
-            DDLogError(@"Start audio record error.");
+        } fail:^(NSError *error) {
+#ifdef DEBUG
+            NSLog(@"[KSScreenCapture] %s:%d Start audio record error: %@", __PRETTY_FUNCTION__, __LINE__, error.localizedDescription);
+#endif
             if (fail) {
-                fail();
+                fail(error);
             }
         }];
     } else {
@@ -121,17 +123,25 @@ static NSString *animationKey = @"KSHighlightAnimation";
     }
     if (_videoPath && _audioPath) {
         if ([THCaptureUtilities mergeVideo:_videoPath andAudio:_audioPath andTarget:self andAction:@selector(mergeDidFinish:WithError:)]) {
-            DDLogInfo(@"Merge OK");
+#ifdef DEBUG
+            NSLog(@"[KSScreenCapture] %s:%d merge OK", __PRETTY_FUNCTION__, __LINE__);
+#endif
+
         }
         else {
-            DDLogInfo(@"Merge ERROR");
+#ifdef DEBUG
+            NSLog(@"[KSScreenCapture] %s:%d merge ERROR", __PRETTY_FUNCTION__, __LINE__);
+#endif
+
         }
     }
 }
 
 - (void)mergeDidFinish:(NSString *)outputPath WithError:(NSError *)error {
 	if (!error) {
-		DDLogInfo(@"Merge finished: %@.", outputPath);
+#ifdef DEBUG
+        NSLog(@"[KSScreenCapture] %s:%d Merge finished: %@.", __PRETTY_FUNCTION__, __LINE__, outputPath);
+#endif
 		//Remove the source file
 		if ([[NSFileManager defaultManager] fileExistsAtPath:_videoPath]) {
 			[[NSFileManager defaultManager] removeItemAtPath:_videoPath error:nil];
@@ -142,7 +152,10 @@ static NSString *animationKey = @"KSHighlightAnimation";
         [self exportVideo:outputPath];
 
 	} else {
-		DDLogError(@"Merge Error: ", error.localizedDescription);
+#ifdef DEBUG
+        NSLog(@"[KSScreenCapture] %s:%d Merge Error: %@.", __PRETTY_FUNCTION__, __LINE__, error.localizedDescription);
+#endif
+
         if ([_delegate respondsToSelector:@selector(captureDidFinish:path:thumb:error:)]) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 [_delegate captureDidFinish:self path:nil thumb:nil error:error];
@@ -182,7 +195,9 @@ static NSString *animationKey = @"KSHighlightAnimation";
                         [self savePhotosAlbumAlert];
                         break;
                     default:
-                        DDLogInfo(@"Save video fail since not determine authorization status.");
+#ifdef DEBUG
+                        NSLog(@"[KSScreenCapture] %s:%d Save video fail since not determine authorization status: %d.", __PRETTY_FUNCTION__, __LINE__, status);
+#endif
                         break;
                 }
             }];
@@ -209,7 +224,9 @@ static NSString *animationKey = @"KSHighlightAnimation";
 #pragma mark - THCaptureDelegate methods
 
 - (void)recordingFinished:(NSString *)outputPath {
-    DDLogInfo(@"Record finished: %@.", outputPath);
+#ifdef DEBUG
+    NSLog(@"[KSScreenCapture] %s:%d Record finished: %@.", __PRETTY_FUNCTION__, __LINE__, outputPath);
+#endif
     if (!_audioCapture) {
         // If there is no audio capture, export the video path directly
         [self exportVideo:outputPath];
@@ -219,14 +236,18 @@ static NSString *animationKey = @"KSHighlightAnimation";
     }
 }
 
-- (void)recordingFaild:(NSError *)error {
-    DDLogError(@"Record failed: %@", error);
+- (void)recordingFailed:(NSError *)error {
+#ifdef DEBUG
+    NSLog(@"[KSScreenCapture] %s:%d Record failed: %@.", __PRETTY_FUNCTION__, __LINE__, error.localizedDescription);
+#endif
 }
 
 #pragma mark - KSAudioCaptureDelegate methods
 
 - (void)KSAudioCaptureDidFinishWithURL:(NSURL *)url successfully:(BOOL)flag {
-    DDLogInfo(@"Audio record finished: %@.", url);
+#ifdef DEBUG
+    NSLog(@"[KSScreenCapture] %s:%d Audio record finished: %@.", __PRETTY_FUNCTION__, __LINE__, url);
+#endif
     [self mergeVideo:nil audio:[url absoluteString]];
 }
 

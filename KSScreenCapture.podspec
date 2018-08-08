@@ -11,5 +11,4 @@ It is base on Blazeice's work which can be find originally in https://github.com
   s.source           = { :git => 'https://github.com/kevinsumios/KSScreenCapture.git', :tag => s.version.to_s }
   s.ios.deployment_target = '9.0'
   s.source_files = '*.{h,m}', 'CoreGraphics/**/*.{h,m}', 'THC/**/*.{h,m}'
-  s.dependency 'CocoaLumberjack', '~> 2.3.0'
 end

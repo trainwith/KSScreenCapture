@@ -28,7 +28,8 @@
 
 - (_Nonnull id)initWithURL:(NSURL * _Nullable)url target:(__kindof UIViewController * _Nonnull)target setting:(NSDictionary * _Nullable)setting;
 - (_Nonnull id)initWithFileName:(NSString * _Nullable)fileName target:(__kindof UIViewController * _Nonnull)target setting:(NSDictionary * _Nullable)setting;
-- (void)startRecordSuccess:(void  (^ _Nullable )(void))success fail:(void (^ _Nullable)(void))fail;
+- (void)startRecordSuccess:(void  (^ _Nullable )(void))success fail:(void (^ _Nullable)(NSError *error))fail;
+
 - (void)pauseRecord;
 - (void)stopRecord;
 - (BOOL)isRecording;
