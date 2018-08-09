@@ -83,7 +83,7 @@
 
 #pragma mark - Action methods
 
-- (void)startRecordSuccess:(void  (^)(void))success fail:(void (^)(void))fail {
+- (void)startRecordSuccess:(void  (^)(void))success fail:(void (^)(NSError *error))fail {
     // Check the permittion granting status.
     [[AVAudioSession sharedInstance] requestRecordPermission:^(BOOL granted) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -98,10 +98,12 @@
                 NSError *error;
                 _recorder = [[AVAudioRecorder alloc] initWithURL:_fileURL settings:_setting error:&error];
                 if (error) {
-                    DDLogError(@"Audio recorder initialize failed: %@", error);
+#ifdef DEBUG
+                    NSLog(@"[KSScreenCapture] %s:%d Audio recorder initialize failed: %@", __PRETTY_FUNCTION__, __LINE__, error.localizedDescription);
+#endif
                     _recorder = nil;
                     if (fail) {
-                        fail();
+                        fail(error);
                         return;
                     }
                 }
@@ -118,7 +120,7 @@
             if (activate && [_recorder record] && success) {
                 success();
             } else if (fail) {
-                fail();
+                fail([[NSError alloc] initWithDomain:@"KSScreenCorder" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"Failed in activate and start recording"}]);
             }
         }
         else {
@@ -136,7 +138,8 @@
             [alert addAction:[UIAlertAction actionWithTitle:_avPermissionAlertOK style:UIAlertActionStyleCancel handler:nil]];
             _recorder = nil;
             if (fail) {
-                fail();
+                fail([[NSError alloc] initWithDomain:@"KSScreenCorder" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"Failed in granted permissions for recording"}]);
+
             }
             [_target presentViewController:alert animated:YES completion:nil];
         }

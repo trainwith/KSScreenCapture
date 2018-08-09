@@ -43,7 +43,9 @@
 	// allocate
     bitmapData = malloc(bitmapByteCount);
     if (bitmapData == NULL) {
-		//NSLog(@"Malloc failed which is too bad.  I was hoping to use this memory.");
+#ifdef DEBUG
+        NSLog(@"[KSScreenCapture] %s:%d Malloc failed which is too bad.  I was hoping to use this memory.", __PRETTY_FUNCTION__, __LINE__);
+#endif
 		CGColorSpaceRelease(colorSpace);
 		// even though CGContextRef technically is not a pointer,
 		// it's typedef probably is and it is a scalar anyway.
@@ -62,7 +64,9 @@
 									 kCGImageAlphaPremultipliedFirst);
 	if (context == NULL) {
 		free (bitmapData);
-		//NSLog(@"Failed to create bitmap!");
+#ifdef DEBUG
+        NSLog(@"[KSScreenCapture] %s:%d Failed to create bitmap!", __PRETTY_FUNCTION__, __LINE__);
+#endif
     }
 	
 	CGContextClearRect(context, CGRectMake(0, 0, size.width, size.height));
@@ -95,7 +99,9 @@
 	// allocate
     bitmapData = malloc(bitmapByteCount);
     if (bitmapData == NULL) {
-		//NSLog(@"Malloc failed which is too bad.  I was hoping to use this memory.");
+#ifdef DEBUG
+        NSLog(@"[KSScreenCapture] %s:%d Malloc failed which is too bad.  I was hoping to use this memory.", __PRETTY_FUNCTION__, __LINE__);
+#endif
 		CGColorSpaceRelease(colorSpace);
 		// even though CGContextRef technically is not a pointer,
 		// it's typedef probably is and it is a scalar anyway.
@@ -114,7 +120,9 @@
 									 kCGImageAlphaPremultipliedFirst);
 	if (context == NULL) {
 		free (bitmapData);
-		//NSLog(@"Failed to create bitmap!");
+#ifdef DEBUG
+        NSLog(@"[KSScreenCapture] %s:%d Failed to create bitmap!", __PRETTY_FUNCTION__, __LINE__);
+#endif
     }
 	
 	// draw the image on the context.
