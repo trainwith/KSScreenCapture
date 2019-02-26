@@ -93,7 +93,7 @@
                 // Setup session
                 if (_allowChangeAudioSession) {
                     _session = [AVAudioSession sharedInstance];
-                    [_session setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
+                    [_session setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionMixWithOthers error:nil];
                 }
                 NSError *error;
                 _recorder = [[AVAudioRecorder alloc] initWithURL:_fileURL settings:_setting error:&error];
